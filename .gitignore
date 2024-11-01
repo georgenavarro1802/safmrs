@@ -1,0 +1,14 @@
+.env
+.idea
+.DS_Store
+.spec
+*.spec
+
+venv
+venv/*
+
+build
+build/*
+
+dist
+dist/*

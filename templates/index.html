@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAFMR Lookup and ROI Calculator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #loader {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .rent-value-cell {
+            cursor: pointer;
+        }
+        .rent-value-cell.selected {
+            background-color: #d1e7dd;
+        }
+        .section-title {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        #cashFlowBadge {
+            display: none;
+            font-size: 1.5em;
+            margin-top: 40px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="loader">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-6">
+                <h1 class="text-center mb-4">SAFMR Lookup</h1>
+                <form method="POST" action="/get_fmr" id="zipcodeForm" onsubmit="fetchFmrData(event)">
+                    <div class="mb-3">
+                        <label for="zipcode" class="form-label">Enter ZIP Code</label>
+                        <input type="text" class="form-control" id="zipcode" name="zipcode" placeholder="e.g., 12345">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Get SAFMR Information</button>
+                </form>
+
+                <div id="fmrResult" class="mt-4">
+                    <!-- SAFMR result will be rendered here -->
+                </div>
+                <div id="cashFlowBadge" class="badge text-white">Monthly Cash Flow: $<span id="cashFlowValue"></span></div>
+            </div>
+            <div class="col-md-6">
+                <h1 class="text-center mb-4">ROI Calculator</h1>
+                <div class="card">
+                    <div class="card-body">
+                        <form id="roiForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="section-title">Property Information</div>
+                                    <div class="mb-3">
+                                        <label for="propertyPrice" class="form-label">Property Price ($)</label>
+                                        <input type="number" class="form-control" id="propertyPrice" placeholder="e.g., 200000">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="downPaymentPercent" class="form-label">Down Payment (%)</label>
+                                        <input type="number" class="form-control" id="downPaymentPercent" value="20" placeholder="e.g., 20">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="closingCostsPercent" class="form-label">Closing Costs (%)</label>
+                                        <input type="number" class="form-control" id="closingCostsPercent" value="1.5" placeholder="e.g., 1.5">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="interestRate" class="form-label">Interest Rate (%)</label>
+                                        <input type="number" class="form-control" id="interestRate" value="6.5" placeholder="e.g., 6.5">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="section-title">Costs and Fees</div>
+                                    <div class="mb-3">
+                                        <label for="insurancePercent" class="form-label">Insurance Rate (%)</label>
+                                        <input type="number" class="form-control" id="insurancePercent" value="0.5" placeholder="e.g., 0.5">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="taxesPercent" class="form-label">Property Taxes Rate (%)</label>
+                                        <input type="number" class="form-control" id="taxesPercent" value="1.25" placeholder="e.g., 1.25">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="propertyMgmtFee" class="form-label">Property Management Fee (%)</label>
+                                        <input type="number" class="form-control" id="propertyMgmtFee" value="10"  placeholder="e.g., 10">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="maintenanceFee" class="form-label">Maintenance Fee ($ per month)</label>
+                                        <input type="number" class="form-control" id="maintenanceFee" value="100"  placeholder="e.g., 200">
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                        <div id="roiResult" class="mt-4">
+                            <!-- Summary of ROI calculations will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function fetchFmrData(event) {
+            event.preventDefault();
+            const zipcode = document.getElementById('zipcode').value;
+            if (!zipcode || zipcode.length !== 5 || isNaN(zipcode)) {
+                alert('Please enter a valid 5-digit ZIP code.');
+                return;
+            }
+            document.getElementById('loader').style.display = 'block';
+            try {
+                const response = await fetch('/get_fmr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ zipcode })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    renderFmrTable(data);
+                } else {
+                    alert('Failed to fetch SAFMR data. Please try again.');
+                }
+            } catch (error) {
+                alert('An error occurred. Please try again later.');
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        function renderFmrTable(data) {
+            const fmrContainer = document.getElementById('fmrResult');
+            let tableHTML = '<div class="card-body">';
+            tableHTML += '<h5 class="card-title">Fair Market Rent (FMR) for ZIP Code ' + data.zipcode + '</h5>';
+            tableHTML += '<p class="card-text"><strong>Area:</strong> ' + data.hud_area + '</p>';
+            tableHTML += '<table class="table table-bordered"><thead><tr><th>Bedroom Type</th><th>Standard</th><th>Minimum (90%)</th><th>Maximum (110%)</th></tr></thead><tbody>';
+            data.fmr_data.forEach(item => {
+                tableHTML += `<tr>
+                                <td>${item.bedroom}</td>
+                                <td class="rent-value-cell">${item.standard}</td>
+                                <td class="rent-value-cell">${item.minimum}</td>
+                                <td class="rent-value-cell">${item.maximum}</td>
+                              </tr>`;
+            });
+            tableHTML += '</tbody></table></div>';
+            fmrContainer.innerHTML = tableHTML;
+
+            // Re-attach click event handlers for rent value cells
+            document.querySelectorAll('.rent-value-cell').forEach(cell => {
+                cell.addEventListener('click', function() {
+                    document.querySelectorAll('.rent-value-cell').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    calculateROI();
+                });
+            });
+        }
+
+        document.querySelectorAll('#roiForm input').forEach(input => {
+            input.addEventListener('input', function() {
+                calculateROI();
+            });
+        });
+
+        function calculateROI() {
+            const propertyPrice = parseFloat(document.getElementById('propertyPrice').value);
+            const downPaymentPercent = parseFloat(document.getElementById('downPaymentPercent').value) / 100;
+            const closingCostsPercent = parseFloat(document.getElementById('closingCostsPercent').value) / 100;
+            const interestRate = parseFloat(document.getElementById('interestRate').value) / 100;
+            const insurancePercent = parseFloat(document.getElementById('insurancePercent').value) / 100;
+            const taxesPercent = parseFloat(document.getElementById('taxesPercent').value) / 100;
+            const propertyMgmtFee = parseFloat(document.getElementById('propertyMgmtFee').value) / 100;
+            const maintenanceFee = parseFloat(document.getElementById('maintenanceFee').value);
+            const rent = parseFloat(document.querySelector('.rent-value-cell.selected')?.textContent?.replace(/\$/g, '').replace(/,/g, '')) || 0;
+
+            if (isNaN(propertyPrice) || isNaN(downPaymentPercent) || isNaN(closingCostsPercent) || isNaN(interestRate) || isNaN(insurancePercent) || isNaN(taxesPercent) || isNaN(propertyMgmtFee) || isNaN(maintenanceFee)) {
+                document.getElementById('roiResult').innerHTML = '<div class="alert alert-danger">Please fill in all fields and select a rent value.</div>';
+                return;
+            }
+
+            // Down payment and closing costs calculation
+            const downPayment = propertyPrice * downPaymentPercent;
+            const closingCosts = propertyPrice * closingCostsPercent;
+
+            // Insurance and taxes calculation
+            const monthlyInsurance = (propertyPrice * insurancePercent) / 12;
+            const monthlyTaxes = (propertyPrice * taxesPercent) / 12;
+
+            // Mortgage calculation (simplified for monthly payment)
+            const loanAmount = propertyPrice - downPayment;
+            const monthlyInterestRate = interestRate / 12;
+            const mortgagePayment = (loanAmount * monthlyInterestRate) / (1 - Math.pow(1 + monthlyInterestRate, -360));
+            const propertyMgmtCost = rent * propertyMgmtFee;
+
+            // Total monthly expenses
+            const totalMonthlyExpenses = mortgagePayment + monthlyInsurance + monthlyTaxes + propertyMgmtCost + maintenanceFee;
+
+            // Cash flow calculation
+            const cashFlow = rent - totalMonthlyExpenses;
+
+            // Update cash flow badge
+            const cashFlowBadge = document.getElementById('cashFlowBadge');
+            const cashFlowValue = document.getElementById('cashFlowValue');
+            if (!isNaN(cashFlow)) {
+                cashFlowBadge.style.display = 'block';
+                cashFlowValue.textContent = cashFlow.toFixed(2);
+                if (cashFlow > 450) {
+                    cashFlowBadge.className = 'badge bg-success text-white';
+                } else if (cashFlow >= 150 && cashFlow <= 449) {
+                    cashFlowBadge.className = 'badge bg-warning text-dark';
+                } else if (cashFlow >= 0 && cashFlow <= 149) {
+                    cashFlowBadge.className = 'badge bg-danger text-dark';
+                } else {
+                    cashFlowBadge.className = 'badge bg-danger text-white';
+                }
+            }
+
+            // Display the summary result
+            const annualCashFlow = cashFlow * 12;
+            const totalInvestment = downPayment + closingCosts;
+            const roi = (annualCashFlow / totalInvestment) * 100;
+            const monthsToRecoverInvestment = totalInvestment / cashFlow;
+
+            const summaryHTML = `
+                <div class="alert alert-info">
+                    <p><strong>Monthly Cash Flow:</strong> $${cashFlow.toFixed(2)}</p>
+                    <p><strong>Annual Cash Flow:</strong> $${annualCashFlow.toFixed(2)}</p>
+                    <p><strong>Annual ROI:</strong> ${roi.toFixed(2)}%</p>
+                    <p><strong>Months to Recover Investment:</strong> ${monthsToRecoverInvestment.toFixed(2)} months</p>
+                    <hr>
+                    <p><strong>Down Payment:</strong> $${downPayment.toFixed(2)}</p>
+                    <p><strong>Closing Costs:</strong> $${closingCosts.toFixed(2)}</p>
+                    <p><strong>Maintenance Fee:</strong> $${maintenanceFee.toFixed(2)} per month</p>
+                    <p><strong>Mortgage Payment:</strong> $${mortgagePayment.toFixed(2)} per month</p>
+                    <p><strong>Insurance:</strong> $${monthlyInsurance.toFixed(2)} per month</p>
+                    <p><strong>Taxes:</strong> $${monthlyTaxes.toFixed(2)} per month</p>
+                </div>
+            `;
+
+            document.getElementById('roiResult').innerHTML = summaryHTML;
+        }
+    </script>
+</body>
+</html>
